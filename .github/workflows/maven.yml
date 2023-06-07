@@ -94,3 +94,14 @@ jobs:
             DOCKERHUB_USERNAME: ${{secrets.DOCKERHUB_USERNAME}}
             DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
           run: mvn -B package --file pom.xml jib:build -DskipTests
+
+        # Cria o artefato de download
+        - name: Crie uma pasta temporária de downloads de artefatos
+          run: mkdir staging
+        - name: Copia os artefatos a serem publicados na pasta temporária
+          run: cp target/*.war staging
+        - name: Usa Upload Artifact do GitHub Action
+          uses: actions/upload-artifact@v3
+          with:
+            name: Package
+            path: staging
