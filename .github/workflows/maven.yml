@@ -16,34 +16,81 @@ on:
 
 jobs:
   build:
+    # Jobs do ambiente de desenvolvimento
+    build-dev:
+      runs-on: ubuntu-latest
+      environment:
+        name: dev
+      steps:
+        - name: Realiza o checkout do repositório
+          uses: actions/checkout@v3
+        - name: Configura o JDK 19
+          uses: actions/setup-java@v3
+          with:
+            java-version: '19'
+            distribution: 'temurin'
+            cache: maven
+        - name: Compila o projeto com Maven
+          run: mvn -B compile --file pom.xm
 
-    runs-on: ubuntu-latest
+    # Jobs do ambiente de homologação
+    build-hmg:
+      runs-on: ubuntu-latest
+      environment:
+        name: hmg
+      needs: build-dev
+      steps:
+        - name: Realiza o checkout do repositório
+          uses: actions/checkout@v3
+          with:
+            fetch-depth: 0
+        - name: Configura o JDK 19
+          uses: actions/setup-java@v3
+          with:
+            java-version: '19'
+            distribution: 'temurin'
+            cache: maven
+        - name: Testa o projeto com Maven
+          run: mvn -B test --file pom.xml
 
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 19
-        uses: actions/setup-java@v3
-        with:
-          java-version: '19'
-          distribution: 'temurin'
-          cache: maven
-      - name: Build with Maven
-        run: mvn -B package --file pom.xml
+        # Executa os passos da análise do código com o sonarcloud
+        - name: Cache SonarCloud packages
+          uses: actions/cache@v3
+          with:
+            path: ~/.sonar/cache
+            key: ${{ runner.os }}-sonar
+            restore-keys: ${{ runner.os }}-sonar
+        - name: Cache Maven packages
+          uses: actions/cache@v3
+          with:
+            path: ~/.m2
+            key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+            restore-keys: ${{ runner.os }}-m2
+        - name: Build and analyze
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+            SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+            run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=kamilacerdeira_calculadora
 
-      - name: Cache SonarCloud packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-      - name: Cache Maven packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
-      - name: Build and analyze
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=kamilacerdeira_calculadora
+    # Jobs do ambiente de produção
+    build-prd:
+      runs-on: ubuntu-latest
+      environment:
+        name: prd
+      needs: build-hmg
+      steps:
+        - name: Realiza o checkout do repositório
+          uses: actions/checkout@v3
+        - name: Configura o JDK 19
+          uses: actions/setup-java@v3
+          with:
+            java-version: '19'
+            distribution: 'temurin'
+            cache: maven
+        # Executa o empacotamento do projeto com o Maven.
+        # O parâmetro -DskipTests pula os testes pois já foram executados no ambiente anterior.
+        - name: Empacota o projeto com Maven, cria a imagem docker e envia imagem para dockerhub.
+          env:
+            DOCKERHUB_USERNAME: ${{secrets.DOCKERHUB_USERNAME}}
+            DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
+          run: mvn -B package --file pom.xml jib:build -DskipTests
