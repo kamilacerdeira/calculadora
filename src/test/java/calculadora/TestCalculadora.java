@@ -22,4 +22,12 @@ public class TestCalculadora {
         double retornoFeito = calculadora.getSubtracao();
         assertEquals(retornoEsperado, retornoFeito, 0);
     }
+
+    @Test
+    public void testGetMultiplicacao() {
+        Calculadora calculadora = new Calculadora(5.0, 10.0);
+        double retornoEsperado = 50.0;
+        double retornoFeito = calculadora.getProduto();
+        assertEquals(retornoEsperado, retornoFeito, 0);
+    }
 }
